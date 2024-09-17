@@ -6,17 +6,20 @@
 namespace Microsoft.Foundation.NoSeries;
 
 using System.Telemetry;
-using System.Globalization;
-// using System.Environment;
+using System.Azure.KeyVault;
+using System.Environment;
 using System.AI;
 using System.Text.Json;
 
 codeunit 324 "No. Series Copilot Impl."
 {
     Access = Internal;
+    InherentPermissions = X;
+    InherentEntitlements = X;
 
     var
         IncorrectCompletionErr: Label 'Incorrect completion. The property %1 is empty', Comment = '%1 = property name';
+        EmptyCompletionErr: Label 'Incorrect completion. The completion is empty';
         IncorrectCompletionNumberOfGeneratedNoSeriesErr: Label 'Incorrect completion. The number of generated number series is incorrect. Expected %1, but got %2', Comment = '%1 = Expected Number, %2 = Actual Number';
         TextLengthIsOverMaxLimitErr: Label 'The property %1 exceeds the maximum length of %2', Comment = '%1 = property name, %2 = maximum length';
         DateSpecificPlaceholderLbl: Label '{current_date}', Locked = true;
@@ -24,6 +27,9 @@ codeunit 324 "No. Series Copilot Impl."
         ChatCompletionResponseErr: Label 'Sorry, something went wrong. Please rephrase and try again.';
         GeneratingNoSeriesForLbl: Label 'Generating number series %1', Comment = '%1 = No. Series';
         FeatureNameLbl: Label 'Number Series with AI', Locked = true;
+        TelemetryToolsSelectionPromptRetrievalErr: Label 'Unable to retrieve the prompt for No. Series Copilot Tools Selection from Azure Key Vault.', Locked = true;
+        ToolLoadingErr: Label 'Unable to load the No. Series Copilot Tool. Please try again later.';
+        InvalidPromptTxt: Label 'Sorry, I couldn''t generate a good result from your input. Please rephrase and try again.';
 
     procedure GetNoSeriesSuggestions()
     var
@@ -35,19 +41,18 @@ codeunit 324 "No. Series Copilot Impl."
         if not AzureOpenAI.IsEnabled(Enum::"Copilot Capability"::"No. Series Copilot") then
             exit;
 
-        FeatureTelemetry.LogUptake('0000LF4', FeatureName(), Enum::"Feature Uptake Status"::Discovered); //TODO: Update signal id
+        FeatureTelemetry.LogUptake('0000LF4', FeatureName(), Enum::"Feature Uptake Status"::Discovered);
 
         Page.Run(Page::"No. Series Generation");
     end;
 
-    procedure Generate(var NoSeriesGeneration: Record "No. Series Generation"; var ResponseText: Text; var GeneratedNoSeries: Record "No. Series Generation Detail"; InputText: Text)
+    procedure Generate(var NoSeriesGeneration: Record "No. Series Generation"; var GeneratedNoSeries: Record "No. Series Generation Detail"; InputText: Text)
     var
         TokenCountImpl: Codeunit "AOAI Token";
         SystemPromptTxt: SecretText;
         CompletePromptTokenCount: Integer;
         Completion: Text;
     begin
-        Clear(ResponseText);
         SystemPromptTxt := GetToolsSelectionSystemPrompt();
 
         CompletePromptTokenCount := TokenCountImpl.GetGPT35TokenCount(SystemPromptTxt) + TokenCountImpl.GetGPT35TokenCount(InputText);
@@ -57,13 +62,14 @@ codeunit 324 "No. Series Copilot Impl."
                 SaveGenerationHistory(NoSeriesGeneration, InputText);
                 CreateNoSeries(NoSeriesGeneration, GeneratedNoSeries, Completion);
             end else
-                ResponseText := Completion;
+                Error(InvalidPromptTxt);
         end else
             SendNotification(GetChatCompletionResponseErr());
     end;
 
     procedure ApplyGeneratedNoSeries(var GeneratedNoSeries: Record "No. Series Generation Detail")
     begin
+        GeneratedNoSeries.SetRange(Exists, false);
         if GeneratedNoSeries.FindSet() then
             repeat
                 InsertNoSeriesWithLines(GeneratedNoSeries);
@@ -86,7 +92,6 @@ codeunit 324 "No. Series Copilot Impl."
         NoSeries.Description := GeneratedNoSeries.Description;
         NoSeries."Manual Nos." := true;
         NoSeries."Default Nos." := true;
-        //TODO: Check if we need to add more fields here, like "Mask", "No. Series Type", "Reverse Sales VAT No. Series" etc.
         if not NoSeries.Insert(true) then
             NoSeries.Modify(true);
     end;
@@ -138,6 +143,7 @@ codeunit 324 "No. Series Copilot Impl."
         RecRef.Modify(true);
     end;
 
+    [NonDebuggable]
     local procedure GetToolsSelectionSystemPrompt() ToolsSelectionSystemPrompt: SecretText
     var
         NoSeriesCopilotSetup: Record "No. Series Copilot Setup";
@@ -159,11 +165,13 @@ codeunit 324 "No. Series Copilot Impl."
         AOAIDeployments: Codeunit "AOAI Deployments";
         NextYearNoSeriesIntent: Codeunit "No. Series Cop. Nxt Yr. Intent";
         CompletionAnswerTxt: Text;
+        NoSeriesCopilotSetup: Record "No. Series Copilot Setup";
     begin
         if not AzureOpenAI.IsEnabled(Enum::"Copilot Capability"::"No. Series Copilot") then
             exit;
 
-        AzureOpenAI.SetAuthorization(Enum::"AOAI Model Type"::"Chat Completions", AOAIDeployments.GetGPT35TurboLatest());
+        NoSeriesCopilotSetup.Get();
+        AzureOpenAI.SetAuthorization(Enum::"AOAI Model Type"::"Chat Completions", NoSeriesCopilotSetup.GetEndpoint(), NoSeriesCopilotSetup.GetDeployment(), NoSeriesCopilotSetup.GetSecretKeyFromIsolatedStorage());
         AzureOpenAI.SetCopilotCapability(Enum::"Copilot Capability"::"No. Series Copilot");
         AOAIChatCompletionParams.SetMaxTokens(MaxOutputTokens());
         AOAIChatCompletionParams.SetTemperature(0);
@@ -181,13 +189,13 @@ codeunit 324 "No. Series Copilot Impl."
         CompletionAnswerTxt := AOAIChatMessages.GetLastMessage(); // the model can answer to rephrase the question, if the user input is not clear
 
         if AOAIOperationResponse.IsFunctionCall() then
-            CompletionAnswerTxt := GenerateNoSeriesUsingToolResult(AzureOpenAI, InputText, AOAIOperationResponse);
+            CompletionAnswerTxt := GenerateNoSeriesUsingToolResult(AzureOpenAI, InputText, AOAIOperationResponse, AddNoSeriesIntent.GetExistingNoSeries());
 
         exit(CompletionAnswerTxt);
     end;
 
     [NonDebuggable]
-    local procedure GenerateNoSeriesUsingToolResult(var AzureOpenAI: Codeunit "Azure OpenAI"; InputText: Text; var AOAIOperationResponse: Codeunit "AOAI Operation Response"): Text
+    local procedure GenerateNoSeriesUsingToolResult(var AzureOpenAI: Codeunit "Azure OpenAI"; InputText: Text; var AOAIOperationResponse: Codeunit "AOAI Operation Response"; ExistingNoSeriesArray: Text): Text
     var
         AOAIChatCompletionParams: Codeunit "AOAI Chat Completion Params";
         AOAIChatMessages: Codeunit "AOAI Chat Messages";
@@ -198,21 +206,23 @@ codeunit 324 "No. Series Copilot Impl."
         ToolResponse: Dictionary of [Text, Integer]; // tool response can be a list of strings, as the response can be too long and exceed the token limit. In this case each string would be a separate message, each of them should be called separately. The integer is the number of tables used in the prompt, so we can test if the LLM answer covers all tables
         GeneratedNoSeriesArray: Text;
         FinalResults: List of [Text]; // The final response will be the concatenation of all the LLM responses (final results).
-        CurrentAICallNumber, TotalAICallsRequired : Integer;
+        FunctionResponses: List of [Codeunit "AOAI Function Response"];
         Progress: Dialog;
     begin
+        if ExistingNoSeriesArray <> '' then
+            FinalResults.Add(ExistingNoSeriesArray);
+
         AOAIFunctionResponse := AOAIOperationResponse.GetFunctionResponse();
         if not AOAIFunctionResponse.IsSuccess() then
             Error(AOAIFunctionResponse.GetError());
 
         ToolResponse := AOAIFunctionResponse.GetResult();
-        TotalAICallsRequired := ToolResponse.Count();
 
         foreach SystemPrompt in ToolResponse.Keys() do begin
             Progress.Open(StrSubstNo(GeneratingNoSeriesForLbl, NoSeriesCopToolsImpl.ExtractAreaWithPrefix(SystemPrompt)));
-            CurrentAICallNumber += 1;
 
             AOAIChatCompletionParams.SetTemperature(0);
+            AOAIChatCompletionParams.SetMaxTokens(MaxOutputTokens());
             AOAIChatMessages.SetPrimarySystemMessage(SystemPrompt);
             AOAIChatMessages.AddUserMessage(InputText);
             AOAIChatMessages.AddTool(NoSeriesGenerateTool);
@@ -224,12 +234,9 @@ codeunit 324 "No. Series Copilot Impl."
 
             FinalResults.Add(GeneratedNoSeriesArray);
 
-            if CurrentAICallNumber < TotalAICallsRequired then
-                Sleep(1000); // sleep for 1000ms, as the model has tokens per minute rate limit
             Clear(AOAIChatMessages);
             Progress.Close();
         end;
-
         exit(ConcatenateToolResponse(FinalResults));
     end;
 
@@ -238,7 +245,6 @@ codeunit 324 "No. Series Copilot Impl."
     begin
         ToolResponse.Get(Message, ExpectedNoSeriesCount);
     end;
-
 
     local procedure GenerateAndReviewToolCompletionWithRetry(var AzureOpenAI: Codeunit "Azure OpenAI"; var AOAIChatMessages: Codeunit "AOAI Chat Messages"; var AOAIChatCompletionParams: Codeunit "AOAI Chat Completion Params"; var GeneratedNoSeriesArrayText: Text; ExpectedNoSeriesCount: Integer): Boolean
     var
@@ -330,6 +336,7 @@ codeunit 324 "No. Series Copilot Impl."
     begin
         ReadGeneratedNumberSeriesJArray(GeneratedNoSeriesArrayText).WriteTo(NoSeriesArrText);
         Json.InitializeCollection(NoSeriesArrText);
+        CheckIfArrayIsNotEmpty(Json.GetCollectionCount());
 
         for i := 0 to Json.GetCollectionCount() - 1 do begin
             Json.GetObjectFromCollectionByIndex(i, NoSeriesObj);
@@ -347,6 +354,12 @@ codeunit 324 "No. Series Copilot Impl."
             CheckIntegerPropertyExistAndCheckIfNotEmpty('tableId', Json);
             CheckIntegerPropertyExistAndCheckIfNotEmpty('fieldId', Json);
         end;
+    end;
+
+    local procedure CheckIfArrayIsNotEmpty(NumberOfGeneratedNoSeries: Integer)
+    begin
+        if NumberOfGeneratedNoSeries = 0 then
+            Error(EmptyCompletionErr);
     end;
 
     local procedure CheckTextPropertyExistAndCheckIfNotEmpty(propertyName: Text; var Json: Codeunit Json)
@@ -413,49 +426,34 @@ codeunit 324 "No. Series Copilot Impl."
     var
         Json: Codeunit Json;
         i: Integer;
-        NoSeriesObj: Text;
         NoSeriesCodes: List of [Text];
-        NoSeriesCode: Text;
     begin
         Json.InitializeCollection(NoSeriesArrText);
 
         for i := 0 to Json.GetCollectionCount() - 1 do begin
-            Json.GetObjectFromCollectionByIndex(i, NoSeriesObj);
-            Json.InitializeObject(NoSeriesObj);
-            Json.GetStringPropertyValueByName('seriesCode', NoSeriesCode);
-            if NoSeriesCodes.Contains(NoSeriesCode) then begin
-                Json.ReplaceOrAddJPropertyInJObject('seriesCode', GenerateNewSeriesCodeValue(NoSeriesCodes, NoSeriesCode));
-                NoSeriesObj := Json.GetObjectAsText();
-                Json.ReplaceJObjectInCollection(i, NoSeriesObj);
-            end;
-            NoSeriesCodes.Add(NoSeriesCode);
+            ProcessNoSeries(i, NoSeriesCodes, Json);
         end;
 
         NoSeriesArrText := Json.GetCollectionAsText()
     end;
 
-    local procedure GenerateNewSeriesCodeValue(var NoSeriesCodes: List of [Text]; var NoSeriesCode: Text): Text
+    local procedure ProcessNoSeries(i: Integer; var NoSeriesCodes: List of [Text]; var Json: Codeunit Json)
     var
-        NewNoSeriesCode: Text;
+        NoSeriesCode: Text;
+        NoSeriesObj: Text;
+        IsExists: Boolean;
     begin
-        repeat
-            NewNoSeriesCode := CopyStr(NoSeriesCode, 1, 18) + '-' + RandomCharacter();
-        until not NoSeriesCodes.Contains(NewNoSeriesCode);
+        Json.GetObjectFromCollectionByIndex(i, NoSeriesObj);
+        Json.InitializeObject(NoSeriesObj);
+        Json.GetBoolPropertyValueFromJObjectByName('exists', IsExists);
+        Json.GetStringPropertyValueByName('seriesCode', NoSeriesCode);
 
-        NoSeriesCode := NewNoSeriesCode;
-        exit(NewNoSeriesCode);
+        if NoSeriesCodes.Contains(NoSeriesCode) and (not IsExists) then begin
+            Json.RemoveJObjectFromCollection(i);
+            exit;
+        end;
+        NoSeriesCodes.Add(NoSeriesCode);
     end;
-
-    local procedure RandomCharacter(): Char
-    begin
-        exit(RandIntInRange(33, 126)); // ASCII: ! (33) to ~ (126)
-    end;
-
-    local procedure RandIntInRange(MinInt: Integer; MaxInt: Integer): Integer
-    begin
-        exit(MinInt - 1 + Random(MaxInt - MinInt + 1));
-    end;
-
 
     local procedure InsertGeneratedNoSeries(var GeneratedNoSeries: Record "No. Series Generation Detail"; NoSeriesObj: Text; GenerationNo: Integer)
     var
@@ -476,7 +474,9 @@ codeunit 324 "No. Series Copilot Impl."
         Json.GetValueAndSetToRecFieldNo(RecRef, 'tableId', GeneratedNoSeries.FieldNo("Setup Table No."));
         Json.GetValueAndSetToRecFieldNo(RecRef, 'fieldId', GeneratedNoSeries.FieldNo("Setup Field No."));
         Json.GetValueAndSetToRecFieldNo(RecRef, 'nextYear', GeneratedNoSeries.FieldNo("Is Next Year"));
-        RecRef.Insert(true);
+        Json.GetValueAndSetToRecFieldNo(RecRef, 'exists', GeneratedNoSeries.FieldNo(Exists));
+        Json.GetValueAndSetToRecFieldNo(RecRef, 'message', GeneratedNoSeries.FieldNo(Message));
+        if RecRef.Insert(true) then;
 
         ValidateGeneratedNoSeries(RecRef);
     end;
@@ -522,33 +522,16 @@ codeunit 324 "No. Series Copilot Impl."
 
     local procedure MaxModelTokens(): Integer
     begin
-        exit(16385); //gpt-3.5-turbo-latest
+        exit(16385); //gpt-4.0
     end;
 
     procedure IsCopilotVisible(): Boolean
     var
-    // EnvironmentInformation: Codeunit "Environment Information";
+        EnvironmentInformation: Codeunit "Environment Information";
     begin
-        // if not EnvironmentInformation.IsSaaSInfrastructure() then //TODO: Check how to keep IsSaaSInfrastructure but be able to test in Docker Environment
+        // if not EnvironmentInformation.IsSaaSInfrastructure() then
         //     exit(false);
 
-        if not IsSupportedLanguage() then
-            exit(false);
-
-        exit(true);
-    end;
-
-    local procedure IsSupportedLanguage(): Boolean
-    var
-        LanguageSelection: Record "Language Selection";
-        UserSessionSettings: SessionSettings;
-    begin
-        UserSessionSettings.Init();
-        LanguageSelection.SetLoadFields("Language Tag");
-        LanguageSelection.SetRange("Language ID", UserSessionSettings.LanguageId());
-        if LanguageSelection.FindFirst() then
-            if LanguageSelection."Language Tag".StartsWith('pt-') then
-                exit(false);
         exit(true);
     end;
 

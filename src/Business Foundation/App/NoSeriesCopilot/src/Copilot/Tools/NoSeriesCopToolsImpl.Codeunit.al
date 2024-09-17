@@ -9,6 +9,8 @@ using System.Reflection;
 
 codeunit 336 "No. Series Cop. Tools Impl."
 {
+    InherentEntitlements = X;
+    InherentPermissions = X;
     Access = Internal;
 
     var
@@ -165,6 +167,9 @@ codeunit 336 "No. Series Cop. Tools Impl."
 
     local procedure IsSetupTable(var TableMetadata: Record "Table Metadata"): Boolean
     begin
+        if not HasPermissionToReadTable(TableMetadata) then
+            exit(false);
+
         if not IsOnlyOneRecord(TableMetadata) then
             exit(false);
 
@@ -172,6 +177,14 @@ codeunit 336 "No. Series Cop. Tools Impl."
             exit(false);
 
         exit(true);
+    end;
+
+    local procedure HasPermissionToReadTable(var TableMetadata: Record "Table Metadata"): Boolean
+    var
+        RecRef: RecordRef;
+    begin
+        RecRef.Open(TableMetadata.ID);
+        exit(RecRef.ReadPermission() and RecRef.WritePermission());
     end;
 
     local procedure IsOnlyOneRecord(var TableMetadata: Record "Table Metadata"): Boolean
@@ -221,11 +234,16 @@ codeunit 336 "No. Series Cop. Tools Impl."
         foreach Entity in Entities do begin
             String1 := RecordMatchMgtCopy.RemoveShortWords(RemoveTextPart(TableMetadata.Caption, ' Setup') + ' ' + RemoveTextParts(Field.FieldName, GetNoSeriesAbbreviations()));
             String2 := RecordMatchMgtCopy.RemoveShortWords(Entity);
-            Score := RecordMatchMgtCopy.CalculateStringNearness(String1, String2, 1, 100) / 100;
+            Score := RecordMatchMgtCopy.CalculateStringNearness(String1, String2, GetMatchLengthTreshold(), 100) / 100;
             if Score >= RequiredNearness() then
                 exit(true);
         end;
         exit(false);
+    end;
+
+    local procedure GetMatchLengthTreshold(): Decimal
+    begin
+        exit(2);
     end;
 
     local procedure RequiredNearness(): Decimal
