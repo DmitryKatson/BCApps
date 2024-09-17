@@ -6,13 +6,20 @@
 namespace Microsoft.Foundation.NoSeries;
 
 using System.AI;
+using System.Azure.KeyVault;
+using System.Telemetry;
 
 codeunit 339 "No. Series Cop. Generate" implements "AOAI Function"
 {
+    InherentEntitlements = X;
+    InherentPermissions = X;
     Access = Internal;
 
     var
+        Telemetry: Codeunit Telemetry;
         FunctionNameLbl: Label 'GenerateNumberSeries', Locked = true;
+        TelemetryTool4DefinitionRetrievalErr: Label 'Unable to retrieve the definition for No. Series Copilot Tool 4 from Azure Key Vault.', Locked = true;
+        ToolLoadingErr: Label 'Unable to load the No. Series Copilot Tool 4. Please try again later.';
 
     procedure GetName(): Text
     begin

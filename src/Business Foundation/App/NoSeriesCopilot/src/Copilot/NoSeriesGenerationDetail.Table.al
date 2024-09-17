@@ -10,6 +10,9 @@ using System.Apps;
 table 392 "No. Series Generation Detail"
 {
     TableType = Temporary;
+    InherentEntitlements = X;
+    InherentPermissions = X;
+
     fields
     {
         field(1; "Generation No."; Integer)
