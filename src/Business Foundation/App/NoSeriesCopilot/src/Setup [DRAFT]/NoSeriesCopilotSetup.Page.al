@@ -35,6 +35,15 @@ page 9245 "No. Series Copilot Setup"
                     ToolTip = 'Specifies the value of the Deployment field.';
                 }
             }
+            group(Embedding)
+            {
+                field("Embeddings Deployment"; Rec."Embeddings Deployment")
+                {
+                    Caption = 'Deployment';
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Embeddings Deployment field.';
+                }
+            }
             group(Secrets)
             {
                 field(SecretKey; SecretKey)

@@ -77,6 +77,13 @@ table 9200 "No. Series Copilot Setup"
             DataClassification = CustomerContent;
             Caption = 'Tool 4 Definition';
         }
+
+        field(50; "Embeddings Deployment"; Text[250])
+        {
+            DataClassification = CustomerContent;
+            Caption = 'Embeddings Deployment';
+        }
+
     }
 
     keys
@@ -103,6 +110,15 @@ table 9200 "No. Series Copilot Setup"
         NoSeriesCopilotSetup.Get();
         NoSeriesCopilotSetup.TestField(NoSeriesCopilotSetup.Deployment);
         exit(NoSeriesCopilotSetup.Deployment);
+    end;
+
+    procedure GetEmbeddingsDeployment() Deployment: Text[250]
+    var
+        NoSeriesCopilotSetup: Record "No. Series Copilot Setup";
+    begin
+        NoSeriesCopilotSetup.Get();
+        NoSeriesCopilotSetup.TestField(NoSeriesCopilotSetup."Embeddings Deployment");
+        exit(NoSeriesCopilotSetup."Embeddings Deployment");
     end;
 
 

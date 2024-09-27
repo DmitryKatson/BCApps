@@ -17,7 +17,7 @@ codeunit 349 "No. Series Cop. Nxt Yr. Intent" implements "AOAI Function"
 
     var
         Telemetry: Codeunit Telemetry;
-        FunctionNameLbl: Label 'GenerateNextYearNumberSeries', Locked = true;
+        FunctionNameLbl: Label 'PrepareNextYearNumberSeries', Locked = true;
         TelemetryTool3DefinitionRetrievalErr: Label 'Unable to retrieve the definition for No. Series Copilot Tool 3 from Azure Key Vault.', Locked = true;
         ToolLoadingErr: Label 'Unable to load the No. Series Copilot Tool 3. Please try again later.';
 

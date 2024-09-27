@@ -188,8 +188,12 @@ codeunit 324 "No. Series Copilot Impl."
 
         CompletionAnswerTxt := AOAIChatMessages.GetLastMessage(); // the model can answer to rephrase the question, if the user input is not clear
 
-        if AOAIOperationResponse.IsFunctionCall() then
+        if AOAIOperationResponse.IsFunctionCall() then begin
             CompletionAnswerTxt := GenerateNoSeriesUsingToolResult(AzureOpenAI, InputText, AOAIOperationResponse, AddNoSeriesIntent.GetExistingNoSeries());
+            // TODO: Uncomment the following lines when the semantic vocabulary is updated.
+            // AddNoSeriesIntent.UpdateSemanticVocabulary();
+            // ChangeNoSeriesIntent.UpdateSemanticVocabulary();
+        end;
 
         exit(CompletionAnswerTxt);
     end;
@@ -341,19 +345,35 @@ codeunit 324 "No. Series Copilot Impl."
         for i := 0 to Json.GetCollectionCount() - 1 do begin
             Json.GetObjectFromCollectionByIndex(i, NoSeriesObj);
             Json.InitializeObject(NoSeriesObj);
-            CheckTextPropertyExistAndCheckIfNotEmpty('seriesCode', Json);
-            CheckMaximumLengthOfPropertyValue('seriesCode', Json, 20);
-            CheckTextPropertyExistAndCheckIfNotEmpty('description', Json);
-            CheckTextPropertyExistAndCheckIfNotEmpty('startingNo', Json);
-            CheckMaximumLengthOfPropertyValue('startingNo', Json, 20);
-            CheckTextPropertyExistAndCheckIfNotEmpty('endingNo', Json);
-            CheckMaximumLengthOfPropertyValue('endingNo', Json, 20);
-            CheckTextPropertyExistAndCheckIfNotEmpty('warningNo', Json);
-            CheckMaximumLengthOfPropertyValue('warningNo', Json, 20);
-            CheckIntegerPropertyExistAndCheckIfNotEmpty('incrementByNo', Json);
-            CheckIntegerPropertyExistAndCheckIfNotEmpty('tableId', Json);
-            CheckIntegerPropertyExistAndCheckIfNotEmpty('fieldId', Json);
+            CheckMandatoryProperties(Json);
         end;
+    end;
+
+    local procedure CheckMandatoryProperties(var Json: Codeunit Json)
+    begin
+        if not CheckIfNumberSeriesIsGenerated(Json) then
+            exit;
+
+        CheckJsonTextProperty('seriesCode', Json, true);
+        CheckMaximumLengthOfPropertyValue('seriesCode', Json, 20);
+        CheckJsonTextProperty('description', Json, true);
+        CheckJsonTextProperty('startingNo', Json, true);
+        CheckMaximumLengthOfPropertyValue('startingNo', Json, 20);
+        CheckJsonTextProperty('endingNo', Json, false);
+        CheckMaximumLengthOfPropertyValue('endingNo', Json, 20);
+        CheckJsonTextProperty('warningNo', Json, false);
+        CheckMaximumLengthOfPropertyValue('warningNo', Json, 20);
+        CheckJsonIntegerProperty('incrementByNo', Json, false);
+        CheckJsonIntegerProperty('tableId', Json, true);
+        CheckJsonIntegerProperty('fieldId', Json, true);
+    end;
+
+    local procedure CheckIfNumberSeriesIsGenerated(var Json: Codeunit Json): Boolean
+    var
+        IsExists: Boolean;
+    begin
+        Json.GetBoolPropertyValueFromJObjectByName('exists', IsExists);
+        exit(not IsExists);
     end;
 
     local procedure CheckIfArrayIsNotEmpty(NumberOfGeneratedNoSeries: Integer)
@@ -362,22 +382,32 @@ codeunit 324 "No. Series Copilot Impl."
             Error(EmptyCompletionErr);
     end;
 
-    local procedure CheckTextPropertyExistAndCheckIfNotEmpty(propertyName: Text; var Json: Codeunit Json)
+    local procedure CheckJsonTextProperty(propertyName: Text; var Json: Codeunit Json; IsRequired: Boolean)
     var
         value: Text;
     begin
         Json.GetStringPropertyValueByName(propertyName, value);
-        if value = '' then
-            Error(IncorrectCompletionErr, propertyName);
+        if not IsRequired then
+            exit;
+
+        if value <> '' then
+            exit;
+
+        Error(IncorrectCompletionErr, propertyName);
     end;
 
-    local procedure CheckIntegerPropertyExistAndCheckIfNotEmpty(propertyName: Text; var Json: Codeunit Json)
+    local procedure CheckJsonIntegerProperty(propertyName: Text; var Json: Codeunit Json; IsRequired: Boolean)
     var
         PropertyValue: Integer;
     begin
         Json.GetIntegerPropertyValueFromJObjectByName(propertyName, PropertyValue);
-        if PropertyValue = 0 then
-            Error(IncorrectCompletionErr, propertyName);
+        if not IsRequired then
+            exit;
+
+        if PropertyValue <> 0 then
+            exit;
+
+        Error(IncorrectCompletionErr, propertyName);
     end;
 
     local procedure CheckMaximumLengthOfPropertyValue(propertyName: Text; var Json: Codeunit Json; maxLength: Integer)
@@ -385,8 +415,10 @@ codeunit 324 "No. Series Copilot Impl."
         value: Text;
     begin
         Json.GetStringPropertyValueByName(propertyName, value);
-        if StrLen(value) > maxLength then
-            Error(TextLengthIsOverMaxLimitErr, propertyName, maxLength);
+        if StrLen(value) <= maxLength then
+            exit;
+
+        Error(TextLengthIsOverMaxLimitErr, propertyName, maxLength);
     end;
 
     local procedure ReadGeneratedNumberSeriesJArray(Completion: Text) NoSeriesJArray: JsonArray
@@ -441,14 +473,12 @@ codeunit 324 "No. Series Copilot Impl."
     var
         NoSeriesCode: Text;
         NoSeriesObj: Text;
-        IsExists: Boolean;
     begin
         Json.GetObjectFromCollectionByIndex(i, NoSeriesObj);
         Json.InitializeObject(NoSeriesObj);
-        Json.GetBoolPropertyValueFromJObjectByName('exists', IsExists);
         Json.GetStringPropertyValueByName('seriesCode', NoSeriesCode);
 
-        if NoSeriesCodes.Contains(NoSeriesCode) and (not IsExists) then begin
+        if NoSeriesCodes.Contains(NoSeriesCode) and (CheckIfNumberSeriesIsGenerated(Json)) then begin
             Json.RemoveJObjectFromCollection(i);
             exit;
         end;
@@ -544,6 +574,7 @@ codeunit 324 "No. Series Copilot Impl."
     begin
         exit('1fd2bfd6-6542-4574-8a88-f8247f4b8334');
     end;
+
 
     procedure RecallNotification()
     var

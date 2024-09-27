@@ -11,6 +11,7 @@ permissionset 330 "No. Series Copilot - Objects"
     Assignable = false;
     Permissions =
         codeunit "No. Series Copilot Impl." = X,
-        codeunit "Record Match Impl." = X;
+    // codeunit "No. Series Cop. Semantic Impl." = X, // TODO: Uncomment this line when the semantic codeunit is ready
+        codeunit "No. Series Text Match Impl." = X;
 
 }
