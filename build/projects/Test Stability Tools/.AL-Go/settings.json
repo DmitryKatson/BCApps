@@ -1,11 +1,11 @@
 {
-    "projectName": "Test Stability Tools",
-    "appFolders":  [
-        "../../../src/Tools/Test Framework/Test Stability Tools/Prevent Metadata Updates"
-    ],
-    "testFolders":  [
-    ],
-    "doNotRunTests": true,
-    "useCompilerFolder": true,
-    "doNotPublishApps": true
+  "$schema": "https://raw.githubusercontent.com/microsoft/AL-Go/ecbbde1e146bc26fa6e7aef790bcafe87e72ab2d/Actions/.Modules/settings.schema.json",
+  "projectName": "Test Stability Tools",
+  "appFolders": [
+    "../../../src/Tools/Test Framework/Test Stability Tools/Prevent Metadata Updates"
+  ],
+  "testFolders": [],
+  "doNotRunTests": true,
+  "useCompilerFolder": true,
+  "doNotPublishApps": true
 }
