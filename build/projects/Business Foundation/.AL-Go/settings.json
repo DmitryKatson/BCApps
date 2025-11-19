@@ -1,24 +1,27 @@
 {
-    "projectName": "Business Foundation",
-    "appFolders":  [
-        "../../../src/Business Foundation/App"
-    ],
-    "testFolders":  [
-        "../../../src/Business Foundation/Test",
-        "../../../src/Business Foundation/Test Library"
-    ],
-    "buildModes": [
-        "Translated"
-    ],
-    "installOnlyReferencedApps": false,
-    "ConditionalSettings": [
-        {
-            "branches": [
-                "releases/*.[0-5]"
-            ],
-            "settings": {
-                "buildModes": [ "Strict" ]
-            }
-        }
-    ]
+  "$schema": "https://raw.githubusercontent.com/microsoft/AL-Go/043c3a212d0131d917eb87c9f9d9e8f55bc67179/Actions/.Modules/settings.schema.json",
+  "projectName": "Business Foundation",
+  "appFolders": [
+    "../../../src/Business Foundation/App"
+  ],
+  "testFolders": [
+    "../../../src/Business Foundation/Test",
+    "../../../src/Business Foundation/Test Library"
+  ],
+  "buildModes": [
+    "Translated"
+  ],
+  "installOnlyReferencedApps": false,
+  "ConditionalSettings": [
+    {
+      "branches": [
+        "releases/*.[0-5]"
+      ],
+      "settings": {
+        "buildModes": [
+          "Strict"
+        ]
+      }
+    }
+  ]
 }

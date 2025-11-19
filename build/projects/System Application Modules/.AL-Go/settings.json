@@ -1,16 +1,17 @@
 {
-    "projectName": "System Application Modules",
-    "appFolders":  [
-        "../../../src/System Application/App/*",
-        "../../../src/Business Foundation/App/*"
-    ],
-    "testFolders":  [
-        "../../../src/System Application/Test/*",
-        "../../../src/System Application/Test Library/*",
-        "../../../src/Business Foundation/Test/*",
-        "../../../src/Business Foundation/Test Library/*"
-    ],
-    "useCompilerFolder": true,
-    "doNotPublishApps": true,
-    "rulesetFile": "../../../src/rulesets/internal.module.ruleset.json"
+  "$schema": "https://raw.githubusercontent.com/microsoft/AL-Go/043c3a212d0131d917eb87c9f9d9e8f55bc67179/Actions/.Modules/settings.schema.json",
+  "projectName": "System Application Modules",
+  "appFolders": [
+    "../../../src/System Application/App/*",
+    "../../../src/Business Foundation/App/*"
+  ],
+  "testFolders": [
+    "../../../src/System Application/Test/*",
+    "../../../src/System Application/Test Library/*",
+    "../../../src/Business Foundation/Test/*",
+    "../../../src/Business Foundation/Test Library/*"
+  ],
+  "useCompilerFolder": true,
+  "doNotPublishApps": true,
+  "rulesetFile": "../../../src/rulesets/internal.module.ruleset.json"
 }
